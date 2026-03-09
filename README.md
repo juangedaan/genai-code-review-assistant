@@ -1,29 +1,29 @@
-# GenAI Code Review Assistant 🤖📋
+# GenAI Code Review Assistant
 
-A GitHub Action that uses OpenAI to review code changes and comment inline on pull requests.
+A minimal AI-powered code review helper. The script takes a filename and prints a basic review comment.
 
-## 🔍 Features
+```mermaid
+flowchart LR
+    File[Source File] --> Script[review.py]
+    Script --> Output[Review Result]
+```
 
-- Summarizes changes in PRs
-- Detects bugs, style issues, and edge cases
-- Comments inline using GitHub API
-- Built with Python + GitHub Actions
+## 📂 Structure
 
-## 🧠 Architecture
+```
+genai-code-review-assistant/
+├── README.md
+├── requirements.txt
+└── scripts/
+    └── review.py
+```
 
-![Architecture](architecture.png)
+## 🚀 Usage
 
-## 📁 Structure
+```bash
+python scripts/review.py path/to/file.py
+```
 
-- `.github/workflows/` – GitHub Actions YAML
-- `scripts/` – Python script for analyzing diffs and calling OpenAI
-- `README.md` – Setup instructions
+## 📜 License
 
-## 🚀 Setup
-
-1. Set up GitHub repository secrets:
-   - `OPENAI_API_KEY`
-   - `GH_TOKEN` (GitHub token with `repo` scope)
-
-2. The action runs automatically on each pull request.
-
+MIT License
