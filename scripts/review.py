@@ -1,10 +1,22 @@
-
 #!/usr/bin/env python3
 
-import sys
+import argparse
 import ast
+import os
 import re
-from typing import List, Dict
+import sys
+from typing import List
+
+DEFAULT_MODEL = "claude-sonnet-5"
+
+REVIEW_SYSTEM_PROMPT = (
+    "You are a senior code reviewer. You are given a unified diff. "
+    "Produce a concise review with two sections:\n"
+    "🔍 Issues Found: bullet list of concrete problems (bugs, security, style), "
+    "or 'None' if clean.\n"
+    "💡 Suggestions: bullet list of actionable improvements.\n"
+    "Reference file names and line context from the diff. Be brief."
+)
 
 class CodeReviewer:
     def __init__(self):
@@ -118,11 +130,90 @@ class CodeReviewer:
             for suggestion in self.suggestions:
                 print(f"  - {suggestion}")
 
-if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python scripts/review.py <file_to_review>")
+def summarize_diff(diff_text: str):
+    files = re.findall(r'^\+\+\+ b/(.+)$', diff_text, re.MULTILINE)
+    added = sum(1 for l in diff_text.splitlines()
+                if l.startswith('+') and not l.startswith('+++'))
+    removed = sum(1 for l in diff_text.splitlines()
+                  if l.startswith('-') and not l.startswith('---'))
+    return files, added, removed
+
+
+def mock_review(diff_text: str) -> str:
+    """Deterministic offline review so the demo works without an API key."""
+    files, added, removed = summarize_diff(diff_text)
+    file_list = ", ".join(files) if files else "(no files detected)"
+    return (
+        "🔍 Issues Found:\n"
+        f"  - [mock] Reviewed {len(files)} file(s): {file_list} "
+        f"(+{added}/-{removed} lines). No AI analysis performed in mock mode.\n"
+        "\n💡 Suggestions:\n"
+        "  - Set ANTHROPIC_API_KEY to get a real AI-generated review.\n"
+        "  - Keep diffs small and focused for higher-quality reviews.\n"
+    )
+
+
+def ai_review_diff(diff_text: str, dry_run: bool = False) -> str:
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if dry_run:
+        return mock_review(diff_text)
+    if not api_key:
+        print("NOTE: ANTHROPIC_API_KEY is not set - no API call will be made.\n"
+              "      Falling back to offline mock review (same as --dry-run).\n",
+              file=sys.stderr)
+        return mock_review(diff_text)
+
+    import anthropic  # imported lazily; static file mode needs no dependencies
+    model = os.environ.get("ANTHROPIC_MODEL", DEFAULT_MODEL)
+    client = anthropic.Anthropic()
+    try:
+        response = client.messages.create(
+            model=model,
+            max_tokens=16000,
+            system=REVIEW_SYSTEM_PROMPT,
+            messages=[{
+                "role": "user",
+                "content": f"Review this diff:\n\n```diff\n{diff_text}\n```",
+            }],
+        )
+    except anthropic.AuthenticationError:
+        sys.exit("Error: invalid ANTHROPIC_API_KEY.")
+    except anthropic.RateLimitError:
+        sys.exit("Error: rate limited by the Anthropic API - retry later.")
+    except anthropic.APIStatusError as e:
+        sys.exit(f"Error: Anthropic API returned {e.status_code}: {e.message}")
+    except anthropic.APIConnectionError:
+        sys.exit("Error: could not reach the Anthropic API - check your network.")
+    return "".join(b.text for b in response.content if b.type == "text")
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="GenAI code review: static analysis of a file, "
+                    "or AI review of a unified diff.")
+    parser.add_argument("target", nargs="?",
+                        help="File to statically analyze (e.g. path/to/file.py)")
+    parser.add_argument("--diff", metavar="DIFF_FILE",
+                        help="Unified diff file to AI-review ('-' for stdin)")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Offline mock review of the diff (no API call)")
+    args = parser.parse_args()
+
+    if args.diff:
+        diff_text = (sys.stdin.read() if args.diff == "-"
+                     else open(args.diff, encoding="utf-8").read())
+        if not diff_text.strip():
+            sys.exit("Error: diff is empty - nothing to review.")
+        print("🤖 AI Code Review (diff mode)...\n")
+        print(ai_review_diff(diff_text, dry_run=args.dry_run))
+    elif args.target:
+        reviewer = CodeReviewer()
+        reviewer.analyze_file(args.target)
+        reviewer.report()
+    else:
+        parser.print_usage()
         sys.exit(1)
-    filename = sys.argv[1]
-    reviewer = CodeReviewer()
-    reviewer.analyze_file(filename)
-    reviewer.report()
+
+
+if __name__ == "__main__":
+    main()

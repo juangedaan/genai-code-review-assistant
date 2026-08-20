@@ -1,0 +1,14 @@
+diff --git a/app.py b/app.py
+index 1111111..2222222 100644
+--- a/app.py
++++ b/app.py
+@@ -1,6 +1,10 @@
+ import os
++import subprocess
+
+ def run_task(user_input):
+-    return os.path.exists(user_input)
++    # TODO: validate input
++    result = eval(user_input)
++    subprocess.call("echo done", shell=True)
++    return result
