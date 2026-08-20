@@ -4,29 +4,19 @@ An advanced AI-powered code review helper using static analysis. The script anal
 
 ```mermaid
 flowchart TD
-    File[Source File] --> Parser[Code Parser]
-    Parser --> Checks[Analysis Checks]
-    Checks --> Issues[Issues Detected]
-    Checks --> Suggestions[Suggestions Generated]
+    PR[GitHub Pull Request] --> Action[GitHub Actions workflow]
+    Action -->|git diff| DiffFile[pr.diff]
+    Dev[Developer CLI] -->|review.py --diff file.diff| DiffFile
+    Dev -->|review.py file.py| Static[Static analysis: AST, complexity, naming, security, imports, style]
 
-    Checks --> LineLength[Line Length Check]
-    Checks --> TodoCheck[TODO/FIXME Check]
-    Checks --> SecurityCheck[Security Scan]
-    Checks --> ComplexityCheck[Complexity Analysis]
-    Checks --> NamingCheck[Naming Conventions]
-    Checks --> ImportCheck[Import Validation]
+    DiffFile --> Key{ANTHROPIC_API_KEY set?}
+    Key -->|yes| API[Anthropic API - claude-sonnet-5]
+    Key -->|no or --dry-run| Mock[Offline mock review]
 
-    LineLength --> Issues
-    TodoCheck --> Issues
-    SecurityCheck --> Issues
-    ComplexityCheck --> Issues
-    NamingCheck --> Issues
-    ImportCheck --> Issues
-
-    Issues --> Report[Review Report]
-    Suggestions --> Report
-
-    Report --> User[Developer Feedback]
+    API --> Report[Review report: Issues Found + Suggestions]
+    Mock --> Report
+    Static --> Report
+    Report --> User[Developer feedback]
 ```
 
 ## 📂 Structure
